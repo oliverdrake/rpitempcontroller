@@ -11,7 +11,7 @@ OUTPUTS = (HEAT_1_GPIO_PIN, HEAT_2_GPIO_PIN, COOL_GPIO_PIN)
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("tempcontrol")
 
-GRAPHITE_ADDRESS = ("192.168.0.207", 2003)
+GRAPHITE_ADDRESS = ("127.0.0.1", 2003)
 GRAPHITE_PATH = "fermentation."
 LOG_TO_GRAPHITE = True
 
@@ -170,6 +170,6 @@ def log_to_graphite(*metrics):
     try:
         sock.connect(GRAPHITE_ADDRESS)
         str_metrics = ["%s %2.2f %d" % metric for metric in metrics]
-        sock.sendall("\n".join(str_metrics))
+        sock.sendall("\n".join(str_metrics) + "\n")
     except socket.error:
         log.warning("Could not send metrics to: %s:%d" % GRAPHITE_ADDRESS)
