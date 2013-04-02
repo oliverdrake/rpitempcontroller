@@ -44,7 +44,7 @@ log = logging.getLogger("tempcontroller")
 def setup_fermenters():
     """ Keyed by temp sensor id """
     return {
-        1: Fermenter("fermenter1", setpoint=20.5, heater_id=1, hysterisis=0.3),
+        1: Fermenter("fermenter1", setpoint=20.0, heater_id=1, hysterisis=0.3),
         2: Fermenter("fermenter2", setpoint=None, heater_id=2),
     }
 
