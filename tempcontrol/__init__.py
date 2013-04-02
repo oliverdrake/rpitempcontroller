@@ -1,7 +1,6 @@
 import time
 import logging
 import socket
-import RPi.GPIO as GPIO
 
 HEAT_1_GPIO_PIN = 22
 HEAT_2_GPIO_PIN = 23
@@ -105,13 +104,13 @@ class Fridge(object):
             if (time.time() - self._wait_start) > self.WAIT_TIME:
                 self.log.debug("Turning on")
                 self._state = self.ON
-                GPIO.output(COOL_GPIO_PIN, 1)
+                _gpio_output(COOL_GPIO_PIN, 1)
 
     def turn_off(self):
         if self._state != self.OFF:
             self.log.debug("Turning off")
             self._state = self.OFF
-            GPIO.output(COOL_GPIO_PIN, 0)
+            _gpio_output(COOL_GPIO_PIN, 0)
 
 
 def update_fermenters(fermenters, temp, temp_serial):
@@ -159,9 +158,9 @@ def update_heaters(fermenters):
     for fermenter in fermenters.values():
         gpio_pin = HEAT_PIN_MAPPING[fermenter.heater_id]
         if fermenter.state == Fermenter.HEATING:
-            GPIO.output(gpio_pin, 1)
+            _gpio_output(gpio_pin, 1)
         else:
-            GPIO.output(gpio_pin, 0)
+            _gpio_output(gpio_pin, 0)
 
 
 def log_to_graphite(*metrics):
@@ -173,3 +172,10 @@ def log_to_graphite(*metrics):
         sock.sendall("\n".join(str_metrics) + "\n")
     except socket.error:
         log.warning("Could not send metrics to: %s:%d" % GRAPHITE_ADDRESS)
+
+
+def _gpio_output(pin, value):
+    """ Wrapping Rpi.GPIO to make unit testing easier """
+    assert value in [1, 0]
+    import RPi.GPIO as GPIO
+    return GPIO.output(pin, value)

@@ -43,7 +43,7 @@ def test_Fermenter_setpoint_None():
     assert_equal(fermenter.state, Fermenter.IDLE)
 
 
-@mock.patch("RPi.GPIO.output")
+@mock.patch("tempcontrol._gpio_output")
 def test_Fridge_off_waiting_off(output):
     fridge = Fridge()
     assert_equal(fridge.state, Fridge.OFF)
@@ -54,7 +54,7 @@ def test_Fridge_off_waiting_off(output):
     output.assert_called_with(24, 0)
 
 
-@mock.patch("RPi.GPIO.output")
+@mock.patch("tempcontrol._gpio_output")
 @mock.patch("time.time")
 def test_Fridge_off_waiting_on(time_, output):
     time_.return_value = 0
@@ -74,7 +74,7 @@ def test_Fridge_off_waiting_on(time_, output):
         output.assert_called_once_with(24, 1)
 
 
-@mock.patch("RPi.GPIO.output")
+@mock.patch("tempcontrol._gpio_output")
 @mock.patch("time.time")
 def test_Fridge_on_off(time_, output):
     time_.return_value = 0
@@ -100,20 +100,20 @@ def test_update_fermenters():
 
 
 def test_update_fermenters_3ea1f5b_ignored():
-    fermenters = [mock.Mock(), mock.Mock()]
+    fermenters = {1: mock.Mock(), 2: mock.Mock()}
     update_fermenters(fermenters, 12, "28-000003ea1f5b")
-    for fermenter in fermenters:
+    for fermenter in fermenters.values():
         assert_not_equal(fermenter.temp, 12)
 
 
 def test_update_fermenters_unknown_serial_ignored():
-    fermenters = [mock.Mock(), mock.Mock()]
+    fermenters = {1: mock.Mock(), 2: mock.Mock()}
     update_fermenters(fermenters, 12, "28-000001234567")
-    for fermenter in fermenters:
+    for fermenter in fermenters.values():
         assert_not_equal(fermenter.temp, 12)
 
 
-@mock.patch("RPi.GPIO.output")
+@mock.patch("tempcontrol._gpio_output")
 def test_update_heaters(output):
     HEATING, IDLE = Fermenter.HEATING, Fermenter.IDLE
     COOLING = Fermenter.COOLING
@@ -127,16 +127,16 @@ def test_update_heaters(output):
         fermenter1.heater_id = 1
         fermenter2.state = f2state
         fermenter2.heater_id = 2
-        fermenters = [fermenter1, fermenter2]
+        fermenters = {1: fermenter1, 2: fermenter2}
         update_heaters(fermenters)
-        for fermenter in fermenters:
+        for fermenter in fermenters.values():
             pin = HEAT_PIN_MAPPING[fermenter.heater_id]
             state = 1 if fermenter.state == HEATING else 0
             call = mock.call(pin, state)
             assert_in(call, output.mock_calls)
 
 
-@mock.patch("RPi.GPIO.output")
+@mock.patch("tempcontrol._gpio_output")
 def test_update_fridge(output):
     HEATING, IDLE = Fermenter.HEATING, Fermenter.IDLE
     COOLING = Fermenter.COOLING
@@ -151,7 +151,7 @@ def test_update_fridge(output):
         fermenter1.heater_id = 1
         fermenter2.state = f2state
         fermenter2.heater_id = 2
-        fermenters = [fermenter1, fermenter2]
+        fermenters = {1: fermenter1, 2: fermenter2}
         fridge = mock.Mock()
         update_fridge(fermenters, fridge)
         if COOLING in [f1state, f2state]:
@@ -166,7 +166,7 @@ def test_log_to_graphite(socket_):
     metric_name = "test.metric.path"
     value = 23.4
     log_to_graphite((metric_name, value, timestamp))
-    socket_().sendall.assert_called_with("%s %2.2f %d" % (metric_name,
+    socket_().sendall.assert_called_with("%s %2.2f %d\n" % (metric_name,
         value, int(timestamp)))
 
 
