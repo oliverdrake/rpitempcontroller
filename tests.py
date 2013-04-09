@@ -3,7 +3,6 @@ import os
 import mock
 import socket
 import httplib
-from concurrent.futures import ThreadPoolExecutor
 from nose.tools import (assert_equal, assert_false, assert_not_equal,
                         assert_in)
 
@@ -304,25 +303,3 @@ class AlmostAlwaysTrue(object):
             self.current_iteration += 1
             return bool(1)
         return bool(0)
-
-
-# def test_main():
-#     main()
-#     assert False
-
-
-# def test_main_loop():
-#     load_config = mock.Mock()
-#     keep_running = mock.Mock()
-#     _keep_running = True
-#     keep_running.side_effect = lambda x: _keep_running
-#     # with mock.patch('__builtin__.True', AlmostAlwaysTrue(1)) as MockTrue:
-#     with ThreadPoolExecutor(max_workers=2) as e:
-#         future = e.submit(main_loop, load_config, keep_running)
-#     while not future.running():
-#         pass
-#     _keep_running = False
-#     assert_equal(future.result(), None)
-#     load_config.assert_called_with()
-    # connect_to_rest_service.assert_called_with()
-
