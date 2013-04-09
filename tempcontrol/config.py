@@ -2,15 +2,20 @@
 Poll the django server regularly using the REST API.
 """
 import httplib
+import logging
 from urlparse import urljoin
 from functools import partial
 
 import drest
 from tempcontrol import Fermenter, Fridge
 
+log = logging.getLogger("tempcontrol.config")
 
-def connect_to_rest_service(address):
-    return drest.TastyPieAPI("http://%s:%d/api/v1/" % address)
+
+def connect_to_rest_service(url):
+    url = urljoin(url, "api/v1")
+    log.info("Connecting to %s" % url)
+    return drest.TastyPieAPI(url)
 
 
 def load_config(api, our_name):

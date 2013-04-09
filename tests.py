@@ -3,21 +3,15 @@ import os
 import mock
 import socket
 import httplib
+from concurrent.futures import ThreadPoolExecutor
 from nose.tools import (assert_equal, assert_false, assert_not_equal,
                         assert_in)
 
-from tempcontrol import (Fridge, update_fridge,
-                         Fermenter, update_fermenters,
+from tempcontrol import (Fridge, update_fridge, Fermenter, update_fermenters,
                          update_heaters, log_to_graphite)
 from tempcontrol.w1_gpio import poll_sensors
 from tempcontrol.config import (connect_to_rest_service, load_config,
                                 _load_cooler, _load_fermenters)
-
-
-# TEMP_SENSOR_SERIALS = {
-#     1: "28-000003ea31f4",
-#     2: "28-000003ea2bb0",
-# }
 
 
 def test_Fermenter_state():
@@ -223,9 +217,8 @@ def test_poll_sensors_invalid_driver_output(listdir, open_, time_):
 
 @mock.patch("drest.TastyPieAPI")
 def test_connect_to_rest_service(TastyPieAPI):
-    address = ("1.2.3.4", 1234)
-    api = connect_to_rest_service(address)
-    TastyPieAPI.assert_called_with("http://%s:%d/api/v1/" % address)
+    api = connect_to_rest_service("http://1.2.3.4:8080")
+    TastyPieAPI.assert_called_with("http://1.2.3.4:8080")
     assert_equal(api, TastyPieAPI())
 
 
@@ -298,3 +291,38 @@ def test_load_config(_load_fermenters, _load_cooler, get_fermenter,
     _setup_gpio.assert_called_with(fridge.gpio_pin, *pins)
     assert_equal(fermenters, _load_fermenters())
     assert_equal(fridge, _load_cooler())
+
+
+class AlmostAlwaysTrue(object):
+    """ https://gist.github.com/daltonmatos/3280885 """
+    def __init__(self, total_iterations=1):
+        self.total_iterations = total_iterations
+        self.current_iteration = 0
+ 
+    def __nonzero__(self):
+        if self.current_iteration < self.total_iterations:
+            self.current_iteration += 1
+            return bool(1)
+        return bool(0)
+
+
+# def test_main():
+#     main()
+#     assert False
+
+
+# def test_main_loop():
+#     load_config = mock.Mock()
+#     keep_running = mock.Mock()
+#     _keep_running = True
+#     keep_running.side_effect = lambda x: _keep_running
+#     # with mock.patch('__builtin__.True', AlmostAlwaysTrue(1)) as MockTrue:
+#     with ThreadPoolExecutor(max_workers=2) as e:
+#         future = e.submit(main_loop, load_config, keep_running)
+#     while not future.running():
+#         pass
+#     _keep_running = False
+#     assert_equal(future.result(), None)
+#     load_config.assert_called_with()
+    # connect_to_rest_service.assert_called_with()
+
