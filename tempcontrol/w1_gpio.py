@@ -5,7 +5,6 @@ kernel driver (bundled with Occidentalis).
 import os
 import threading
 import collections
-import pyaio
 import time
 import re
 import logging

@@ -2,25 +2,27 @@ import time
 import os
 import mock
 import socket
+import httplib
 from nose.tools import (assert_equal, assert_false, assert_not_equal,
                         assert_in)
 
 from tempcontrol import (Fridge, update_fridge,
                          Fermenter, update_fermenters,
-                         update_heaters, log_to_graphite,
-                         TEMP_SENSORS, HEAT_PIN_MAPPING)
+                         update_heaters, log_to_graphite)
 from tempcontrol.w1_gpio import poll_sensors
+from tempcontrol.config import (connect_to_rest_service, load_config,
+                                _load_cooler, _load_fermenters)
 
 
-TEMP_SENSOR_SERIALS = {
-    1: "28-000003ea31f4",
-    2: "28-000003ea2bb0",
-}
+# TEMP_SENSOR_SERIALS = {
+#     1: "28-000003ea31f4",
+#     2: "28-000003ea2bb0",
+# }
 
 
 def test_Fermenter_state():
     setpoint = 20.0
-    fermenter = Fermenter("uut", setpoint, 1, hysterisis=0.2)
+    fermenter = Fermenter("uut", setpoint, 22, hysterisis=0.2)
     assert_equal(fermenter.temp, None)
     assert_equal(fermenter.state, Fermenter.IDLE)
     for temp, expected_state in ((19, Fermenter.HEATING),
@@ -38,14 +40,14 @@ def test_Fermenter_state():
 
 
 def test_Fermenter_setpoint_None():
-    fermenter = Fermenter("uut", setpoint=None, heater_id=1)
+    fermenter = Fermenter("uut", setpoint=None, gpio_pin=22)
     fermenter.temp = 5
     assert_equal(fermenter.state, Fermenter.IDLE)
 
 
 @mock.patch("tempcontrol._gpio_output")
 def test_Fridge_off_waiting_off(output):
-    fridge = Fridge()
+    fridge = Fridge(24)
     assert_equal(fridge.state, Fridge.OFF)
     fridge.turn_on()
     assert_equal(fridge.state, Fridge.WAITING)
@@ -60,7 +62,7 @@ def test_Fridge_off_waiting_on(time_, output):
     time_.return_value = 0
     for i in range(2):
         output.reset_mock()
-        fridge = Fridge()
+        fridge = Fridge(24)
         assert_equal(fridge.state, Fridge.OFF)
         fridge.turn_on()
         assert_equal(fridge.state, Fridge.WAITING)
@@ -78,7 +80,7 @@ def test_Fridge_off_waiting_on(time_, output):
 @mock.patch("time.time")
 def test_Fridge_on_off(time_, output):
     time_.return_value = 0
-    fridge = Fridge()
+    fridge = Fridge(24)
     fridge.turn_on()
     time_.return_value += Fridge.WAIT_TIME + 1
     fridge.turn_on()
@@ -89,13 +91,13 @@ def test_Fridge_on_off(time_, output):
 
 def test_update_fermenters():
     fermenters = {
-        1: Fermenter(name="one", setpoint=14, heater_id=1),
-        2: Fermenter(name="two", setpoint=15, heater_id=2)
+        "28-000003ea31f4": Fermenter(name="one", setpoint=14, gpio_pin=22),
+        "28-000003ea2bb0": Fermenter(name="two", setpoint=15, gpio_pin=23)
     }
     temp = 13
-    for sensorid, serial in TEMP_SENSOR_SERIALS.items():
+    for serial in ["28-000003ea31f4", "28-000003ea2bb0"]:
         update_fermenters(fermenters, temp, serial)
-        fermenter = fermenters[sensorid]
+        fermenter = fermenters[serial]
         assert_equal(fermenter.temp, temp)
 
 
@@ -130,9 +132,8 @@ def test_update_heaters(output):
         fermenters = {1: fermenter1, 2: fermenter2}
         update_heaters(fermenters)
         for fermenter in fermenters.values():
-            pin = HEAT_PIN_MAPPING[fermenter.heater_id]
             state = 1 if fermenter.state == HEATING else 0
-            call = mock.call(pin, state)
+            call = mock.call(fermenter.gpio_pin, state)
             assert_in(call, output.mock_calls)
 
 
@@ -166,8 +167,8 @@ def test_log_to_graphite(socket_):
     metric_name = "test.metric.path"
     value = 23.4
     log_to_graphite((metric_name, value, timestamp))
-    socket_().sendall.assert_called_with("%s %2.2f %d\n" % (metric_name,
-        value, int(timestamp)))
+    message = "%s %2.2f %d\n" % (metric_name, value, int(timestamp))
+    socket_().sendall.assert_called_with(message)
 
 
 @mock.patch("socket.socket")
@@ -218,3 +219,82 @@ def test_poll_sensors_invalid_driver_output(listdir, open_, time_):
     callback = mock.Mock()
     poll_sensors(callback)
     assert_false(callback.called)
+
+
+@mock.patch("drest.TastyPieAPI")
+def test_connect_to_rest_service(TastyPieAPI):
+    address = ("1.2.3.4", 1234)
+    api = connect_to_rest_service(address)
+    TastyPieAPI.assert_called_with("http://%s:%d/api/v1/" % address)
+    assert_equal(api, TastyPieAPI())
+
+
+def _mock_api(status, resource_name, objects=None, method="get"):
+    api = mock.Mock()
+    response = mock.Mock()
+    response.status = httplib.OK
+    if objects:
+        response.data = {
+            "objects": objects,
+        }
+    resource = getattr(api, resource_name)
+    getattr(resource, method).return_value = response
+    return api
+
+
+def test__load_cooler():
+    api = mock.Mock()
+    response = mock.Mock()
+    response.status = httplib.OK
+    response.data = {"gpio_pin": 15}
+    api.coolers.get.return_value = response
+    fridge = _load_cooler(api)
+    api.coolers.get.assert_called_with(1)
+    assert_equal(fridge.gpio_pin, 15)
+
+
+@mock.patch("tempcontrol.config.get_temp_probe")
+@mock.patch("tempcontrol.config.get_fermentation_profile")
+@mock.patch("tempcontrol.config.get_heater")
+def test__load_fermenters(get_heater, get_fermentation_profile,
+                          get_temp_probe):
+    api = mock.Mock()
+    configs = [{
+        "profile": "http://profile",
+        "heater": "http://heater1",
+        "probe": "http://probe1",
+        "name": "Fermenter1",
+    }]
+    fermenters = _load_fermenters(api, *configs)
+    get_heater.assert_called_with(api, "http://heater1")
+    get_fermentation_profile.assert_called_with(api, "http://profile")
+    get_temp_probe.assert_called_with(api, "http://probe1")
+    assert len(fermenters) == 1
+    assert_equal(fermenters.keys(), [get_temp_probe()["serial"]])
+    fermenter = fermenters[get_temp_probe()["serial"]]
+    assert_equal(fermenter.name, "Fermenter1")
+
+
+@mock.patch("tempcontrol.config._setup_gpio")
+@mock.patch("tempcontrol.config.get_fermenter")
+@mock.patch("tempcontrol.config._load_cooler")
+@mock.patch("tempcontrol.config._load_fermenters")
+def test_load_config(_load_fermenters, _load_cooler, get_fermenter,
+                     _setup_gpio):
+    api = mock.Mock()
+    response = mock.Mock()
+    response.status = httplib.OK
+    response.data = {
+        "objects": [{
+            "fermenters": ["http://fermenter1"],
+        }]
+    }
+    api.tempcontrolservers.get.return_value = response
+    fermenters, fridge = load_config(api, "testserver")
+    get_fermenter.assert_called_with(api, "http://fermenter1")
+    _load_fermenters.assert_called_with(api, get_fermenter())
+    _load_cooler.assert_called_with(api)
+    pins = [f.gpio_pin for f in fermenters.values()]
+    _setup_gpio.assert_called_with(fridge.gpio_pin, *pins)
+    assert_equal(fermenters, _load_fermenters())
+    assert_equal(fridge, _load_cooler())
