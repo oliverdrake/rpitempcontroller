@@ -2,10 +2,10 @@ import time
 import logging
 import socket
 
-HEAT_1_GPIO_PIN = 22
-HEAT_2_GPIO_PIN = 23
-COOL_GPIO_PIN = 24
-OUTPUTS = (HEAT_1_GPIO_PIN, HEAT_2_GPIO_PIN, COOL_GPIO_PIN)
+# HEAT_1_GPIO_PIN = 22
+# HEAT_2_GPIO_PIN = 23
+# COOL_GPIO_PIN = 24
+# OUTPUTS = (HEAT_1_GPIO_PIN, HEAT_2_GPIO_PIN, COOL_GPIO_PIN)
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("tempcontrol")
@@ -17,17 +17,17 @@ LOG_TO_GRAPHITE = True
 # Sensors 1 + 2 should be tied to fermenters that are hooked up
 # to heaters 1 + 2 respectively. Sensor 3 can be used for general
 # measurement.
-TEMP_SENSORS = {
-    "28-000003ea31f4": 1,
-    "28-000003ea2bb0": 2,
-    "28-000003ea1f5b": 3,
-}
+# TEMP_SENSORS = {
+#     "28-000003ea31f4": 1,
+#     "28-000003ea2bb0": 2,
+#     "28-000003ea1f5b": 3,
+# }
 
 # Map heater ids to GPIO pins:
-HEAT_PIN_MAPPING = {
-    1: HEAT_1_GPIO_PIN,
-    2: HEAT_2_GPIO_PIN,
-}
+# HEAT_PIN_MAPPING = {
+#     1: HEAT_1_GPIO_PIN,
+#     2: HEAT_2_GPIO_PIN,
+# }
 
 
 class Fermenter(object):
@@ -38,12 +38,11 @@ class Fermenter(object):
     IDLE = 1
     HEATING = 2
     COOLING = 3
-    def __init__(self, name, setpoint, heater_id, hysterisis=0.5):
-        assert heater_id in HEAT_PIN_MAPPING
+    def __init__(self, name, setpoint, gpio_pin, hysterisis=0.5):
         self.name = name
         self.setpoint = setpoint
         self.hysterisis = hysterisis
-        self.heater_id = heater_id
+        self.gpio_pin = gpio_pin
         self.temp = None
         self._state = self.IDLE
         logger_name = "tempcontrol.Fermenter.%s" % name
@@ -71,6 +70,11 @@ class Fermenter(object):
                 self.setpoint, self._state))
         return self._state
 
+    def __repr__(self):
+        return "<%s(name:%s, set:%s, gpio:%d)>" % (self.__class__.__name__,
+                                                   self.name, self.setpoint,
+                                                   self.gpio_pin)
+
 
 class Fridge(object):
     """
@@ -84,7 +88,8 @@ class Fridge(object):
     ON = 3
     WAIT_TIME = 60  # (seconds) to protect the compressor
 
-    def __init__(self):
+    def __init__(self, gpio_pin):
+        self.gpio_pin = gpio_pin
         self._state = self.OFF
         self._wait_start = None
         self.log = logging.getLogger("tempcontrol.Fridge")
@@ -104,13 +109,16 @@ class Fridge(object):
             if (time.time() - self._wait_start) > self.WAIT_TIME:
                 self.log.debug("Turning on")
                 self._state = self.ON
-                _gpio_output(COOL_GPIO_PIN, 1)
+                _gpio_output(self.gpio_pin, 1)
 
     def turn_off(self):
         if self._state != self.OFF:
             self.log.debug("Turning off")
             self._state = self.OFF
-            _gpio_output(COOL_GPIO_PIN, 0)
+            _gpio_output(self.gpio_pin, 0)
+
+    def __repr__(self):
+        return "<%s(pin:%d)>" % (self.__class__.__name__, self.gpio_pin)
 
 
 def update_fermenters(fermenters, temp, temp_serial):
@@ -118,12 +126,9 @@ def update_fermenters(fermenters, temp, temp_serial):
     Take in a DS18B20 temperature reading and update the corresponding
     fermenter - will simply return if the serial is not recognized.
     """
-    if temp_serial not in TEMP_SENSORS:
+    if temp_serial not in fermenters:
         return
-    sensor_id = TEMP_SENSORS[temp_serial]
-    if sensor_id not in [1, 2]:
-        return
-    fermenter = fermenters[sensor_id]
+    fermenter = fermenters[temp_serial]
     fermenter.temp = temp
     if LOG_TO_GRAPHITE and fermenter.setpoint is not None:
         path = GRAPHITE_PATH + fermenter.name
@@ -142,6 +147,8 @@ def update_fridge(fermenters, fridge):
     """
     Turn fridge on if any of the fermenters need it - only turn
     the fridge off if none of the fermenters need it.
+    Only supporting one fridge at the moment - assuming both fermenters
+    are sharing it.
     """
     states = [fermenter.state for fermenter in fermenters.values()]
     if Fermenter.COOLING in states:
@@ -156,7 +163,7 @@ def update_heaters(fermenters):
     fermenter's state.
     """
     for fermenter in fermenters.values():
-        gpio_pin = HEAT_PIN_MAPPING[fermenter.heater_id]
+        gpio_pin = fermenter.gpio_pin
         if fermenter.state == Fermenter.HEATING:
             _gpio_output(gpio_pin, 1)
         else:
