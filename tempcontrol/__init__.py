@@ -2,32 +2,12 @@ import time
 import logging
 import socket
 
-# HEAT_1_GPIO_PIN = 22
-# HEAT_2_GPIO_PIN = 23
-# COOL_GPIO_PIN = 24
-# OUTPUTS = (HEAT_1_GPIO_PIN, HEAT_2_GPIO_PIN, COOL_GPIO_PIN)
-
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("tempcontrol")
 
 GRAPHITE_ADDRESS = ("127.0.0.1", 2003)
 GRAPHITE_PATH = "fermentation."
 LOG_TO_GRAPHITE = True
-
-# Sensors 1 + 2 should be tied to fermenters that are hooked up
-# to heaters 1 + 2 respectively. Sensor 3 can be used for general
-# measurement.
-# TEMP_SENSORS = {
-#     "28-000003ea31f4": 1,
-#     "28-000003ea2bb0": 2,
-#     "28-000003ea1f5b": 3,
-# }
-
-# Map heater ids to GPIO pins:
-# HEAT_PIN_MAPPING = {
-#     1: HEAT_1_GPIO_PIN,
-#     2: HEAT_2_GPIO_PIN,
-# }
 
 
 class Fermenter(object):

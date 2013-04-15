@@ -1,7 +1,10 @@
 import argparse
 import logging
+import time
 
-from config import connect_to_rest_service, load_config
+from tempcontrol.config import connect_to_rest_service, load_config, teardown
+from tempcontrol.w1_gpio import poll_sensors
+from tempcontrol import update_fermenters, update_fridge, update_heaters
 
 def main():
     """ Main entry point """
@@ -32,7 +35,21 @@ def main_loop(load_config):
         up to date.
     """
     log = logging.getLogger("tempcontrol.cmd.main_loop")
+    log.info("Starting main loop")
     while True:
-        log.info("Starting main loop")
         log.debug("Updating config")
         fermenters, fridge = load_config()
+
+        def temp_reading_callback(timestamp, serial, temp):
+            update_fermenters(fermenters, temp, serial)
+            update_heaters(fermenters)
+            update_fridge(fermenters, fridge)
+        try:
+            poll_sensors(temp_reading_callback)
+            time.sleep(30)
+        finally:
+            log.info("Tearing down")
+            teardown(fermenters, fridge)
+            log.info("Teardown complete")
+    log.info("Main loop finished")
+
