@@ -7,7 +7,7 @@ from urlparse import urljoin
 from functools import partial
 
 import drest
-from tempcontrol import Fermenter, Fridge
+from tempcontrol import Fermenter, Fridge, _gpio_output
 
 log = logging.getLogger("tempcontrol.config")
 
@@ -24,9 +24,18 @@ def load_config(api, our_name):
                          for uri in server_config["fermenters"]]
     fermenters = _load_fermenters(api, *fermenter_configs)
     fridge = _load_cooler(api)
+    for fermenter in fermenters.values():
+        log.info("Fermenter: %r" % fermenter)
+
     output_pins = [f.gpio_pin for f in fermenters.values()]
     _setup_gpio(fridge.gpio_pin, *output_pins)
     return fermenters, fridge
+
+
+def teardown(fermenters, fridge):
+    output_pins = [f.gpio_pin for f in fermenters.values()]
+    output_pins += [fridge.gpio_pin,]
+    map(partial(_gpio_output, value=0), output_pins)
 
 
 def _load_cooler(api):
@@ -59,7 +68,7 @@ def get_tempcontrolserver(api, our_name):
     response = api.tempcontrolservers.get(params=dict(name=our_name))
     assert response.status == httplib.OK
     objects = response.data["objects"]
-    assert len(objects) == 1
+    assert len(objects) == 1, "expected 1 server, got %d" % len(objects)
     return objects[0]
 
 
