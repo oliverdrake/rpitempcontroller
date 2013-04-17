@@ -1,6 +1,7 @@
 import argparse
 import logging
 import time
+import daemon
 
 from tempcontrol.config import (connect_to_rest_service, load_config, teardown,
                                 read_config_file)
@@ -15,6 +16,9 @@ def main():
     parser.add_argument('config_file', metavar='config_file', type=str,
                         help='path to config file',
                         default='/etc/rpitempcontroller.conf')
+    parser.add_argument('--daemon', dest='daemon', action="store_true",
+                        help='optional: make this a daemon',
+                        default=False)
     args = parser.parse_args()
     log.info("temp control server main")
 
@@ -26,7 +30,11 @@ def main():
     def load_config_():
         api = connect_to_rest_service(url)
         return load_config(api, our_name)
-    main_loop(load_config_)
+    if args.daemon:
+        with daemon.DaemonContext():
+            main_loop(load_config_)
+    else:
+        main_loop(load_config_)
 
 
 def main_loop(load_config):
