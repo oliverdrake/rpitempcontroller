@@ -2,7 +2,8 @@ import argparse
 import logging
 import time
 
-from tempcontrol.config import connect_to_rest_service, load_config, teardown
+from tempcontrol.config import (connect_to_rest_service, load_config, teardown,
+                                read_config_file)
 from tempcontrol.w1_gpio import poll_sensors
 from tempcontrol import update_fermenters, update_fridge, update_heaters
 
@@ -11,18 +12,20 @@ def main():
     log = logging.getLogger("tempcontrol.cmd.main")
     parser = argparse.ArgumentParser(description='Control one or more '
                                      'fermenters')
-    parser.add_argument('django_server_url', metavar='url', type=str,
-                        help='URL of a running django config server')
-    parser.add_argument('server_name', metavar='server_name', type=str,
-                        help='Our name')
+    parser.add_argument('config_file', metavar='config_file', type=str,
+                        help='path to config file',
+                        default='/etc/rpitempcontroller.conf')
     args = parser.parse_args()
     log.info("temp control server main")
-    log.info("django server url: %s" % args.django_server_url)
-    log.info("server (our) name: %s" % args.server_name)
+
+    our_name, url = read_config_file(args.config_file)
+
+    log.info("django server url: %s" % url)
+    log.info("server (our) name: %s" % our_name)
 
     def load_config_():
-        api = connect_to_rest_service(args.django_server_url)
-        return load_config(api, args.server_name)
+        api = connect_to_rest_service(url)
+        return load_config(api, our_name)
     main_loop(load_config_)
 
 

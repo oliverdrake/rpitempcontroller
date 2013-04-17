@@ -5,6 +5,7 @@ import httplib
 import logging
 from urlparse import urljoin
 from functools import partial
+import ConfigParser
 
 import drest
 from tempcontrol import Fermenter, Fridge, _gpio_output
@@ -18,7 +19,17 @@ def connect_to_rest_service(url):
     return drest.TastyPieAPI(url)
 
 
+def read_config_file(filename):
+    """ read configparser config """
+    config = ConfigParser.ConfigParser()
+    config.read(filename)
+    our_name = config.get("tempcontrolserver", "name")
+    url = config.get("tempcontrolserver", "config_server_url")
+    return our_name, url
+
+
 def load_config(api, our_name):
+    """ Load config from django server using our server name """
     server_config = get_tempcontrolserver(api, our_name)
     fermenter_configs = [get_fermenter(api, uri)
                          for uri in server_config["fermenters"]]
