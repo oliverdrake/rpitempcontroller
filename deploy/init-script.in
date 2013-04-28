@@ -18,7 +18,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="Raspberry pi DS18B20 + GPIO temp control daemon"
 NAME=tempcontroller
 DAEMON={{ python_bin_dir }}/$NAME
-DAEMON_ARGS="{{ config_file }}"
+DAEMON_ARGS="{{ config_file }} --daemon"
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
 

@@ -1,5 +1,6 @@
 import argparse
 import logging
+import logging.config
 import time
 import daemon
 
@@ -10,6 +11,31 @@ from tempcontrol import update_fermenters, update_fridge, update_heaters
 
 def main():
     """ Main entry point """
+    logging.config.dictConfig({
+        'version': 1,
+        'root': {
+            'level': 'DEBUG',
+            'handlers': ['file', ],
+        },
+        'handlers': {
+            'file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'level': 'DEBUG',
+                'formatter': 'detailed',
+                'filename': '/var/log/tempcontroller.log',
+                'mode': 'a',
+                'maxBytes': 1000000,
+                'backupCount': 5,
+            },
+        },
+        'formatters': {
+            'detailed': {
+                'format': '%(asctime)s %(module)-17s line:%(lineno)-4d ' \
+                '%(levelname)-8s %(message)s',
+            },
+        },
+    })
+
     log = logging.getLogger("tempcontrol.cmd.main")
     parser = argparse.ArgumentParser(description='Control one or more '
                                      'fermenters')
